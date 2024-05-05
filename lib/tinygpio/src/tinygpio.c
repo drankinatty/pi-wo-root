@@ -1,3 +1,15 @@
+/**
+ * Adapted from Tiny GPIO Access
+ * http://abyz.me.uk/rpi/pigpio/examples.html
+ * Public Domain
+ * as modified:
+ *
+ *  GPIO access for Raspberry Pi through /dev/gpiomem
+ *
+ *  Copyright (c) David C. Rankin, 2022-2024
+ *  License: GPLv2
+ */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>

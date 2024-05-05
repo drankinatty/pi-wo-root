@@ -26,7 +26,7 @@ float rad2deg (float rad)
 int main (int argc, char **argv) {
 
   /* if argument given use pwm1, otherwise pwm0 by default*/
-  pwm_t pwm = { .pwmfs = argc > 3 ? PWM1FS: PWM0FS };   /* pwm struct instance */
+  pwm_t pwm = { .pwmfs = argc > 3 ? PWM1FS : PWM0FS };
 
   unsigned  delay = 30000,
             revs = 12;

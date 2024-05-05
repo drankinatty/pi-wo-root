@@ -1,3 +1,15 @@
+/**
+ * Adapted from Tiny GPIO Access
+ * http://abyz.me.uk/rpi/pigpio/examples.html
+ * Public Domain
+ * as modified:
+ *
+ *  GPIO access for Raspberry Pi through /dev/gpiomem
+ *
+ *  Copyright (c) David C. Rankin, 2022-2024
+ *  License: GPLv2
+ */
+
 #ifndef tinygpio_h
 #define tinygpio_h  1
 
@@ -14,8 +26,8 @@
 #define GPPUDCLK0 38
 #define GPPUDCLK1 39
 
-#define PI_BANK (gpio>>5)
-#define PI_BIT  (1<<(gpio&0x1F))
+#define PI_BANK (gpio >> 5)
+#define PI_BIT  (1 << (gpio & 0x1f))
 
 /* gpio modes. */
 

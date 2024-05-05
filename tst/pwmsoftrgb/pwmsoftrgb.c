@@ -326,7 +326,7 @@ void *signal_thread (void *data)
 /* dump pwmclk_t values */
 void prn_pwmclk (pwmclk_t *pwmclk)
 {
-  printf ("\npwmclk:\n"
+  printf ("\npwmclk config\n"
           "  clock freq : %6u  (Hz)\n"
           "  period     : %6u  (ns)\n"
           "  PWM freq   : %6u  (Hz)\n"
@@ -347,12 +347,12 @@ void prn_pwmclk (pwmclk_t *pwmclk)
 void prn_pwmpin (softpwm_t *pin)
 {
   for (__u8 i = 0; i < npins; i++) {
-    printf ("\npwmpin:\n"
+    printf ("\npwmpin[%hhu]\n"
             "  GPIO       : %6hhu\n"
             "  dutycycle  : %6hhu  (%%)\n"
             "  off_cnt    : %6hu\n"
             "  on_cnt     : %6hu\n",
-            pin[i].gpio, pin[i].dutycycle,
+            i, pin[i].gpio, pin[i].dutycycle,
             pin[i].off_cnt, pin[i].on_cnt);
   }
 }
@@ -361,9 +361,13 @@ void prn_pwmpin (softpwm_t *pin)
 /* dump gpio_v2 gpiofd and linereq state */
 void prn_gpio_v2_cfg (int gpiofd, struct gpio_v2_line_request *linereq)
 {
-  printf ("\ngpio config:\n"
+  printf ("\nlinereq config\n"
           "  gpiofd     : %6d\n"
-          "  linereq.fd : %6d\n", gpiofd, linereq->fd);
+          "  .fd        : %6d\n"
+          "  .num_lines : %6u\n"
+          "  .consumer  :      %s\n\n"
+          "  pins\n", gpiofd,
+          linereq->fd, linereq->num_lines, linereq->consumer);
 
   for (__u8 l = 0; l < linereq->num_lines; l++) {
     printf ("  .offset[%hhu] : %6hhu\n", l, linereq->offsets[l]);
@@ -390,7 +394,7 @@ int main (int argc, char **argv) {
   struct gpio_v2_line_request linereq = { .offsets = {pinred,
                                                       pingreen,
                                                       pinblue},
-                                          .consumer = "pwmsoftclock",
+                                          .consumer = "pwmsoftclk",
                                           .config = linecfg,
                                           .num_lines = 3 };
 
@@ -464,7 +468,7 @@ int main (int argc, char **argv) {
   prn_pwmclk (&pwmclk);
   prn_pwmpin (pwmpins);
 
-  printf ("\nconfiguring GPIO through '%s'\n", GPIOCHIP);
+  printf ("\nGPIO_V2 ABI config using '%s'\n", GPIOCHIP);
 
   /* open gpiochipX device for pin control with ioctl calls */
   if ((gpiofd = gpio_dev_open (GPIOCHIP)) == -1) {
@@ -492,6 +496,8 @@ int main (int argc, char **argv) {
   /* dump of gpio configured values to stdout (optional) */
   prn_gpio_v2_cfg (gpiofd, &linereq);
 
+  puts ("\ncreating separate thread to handle interval timer signal");
+
   /* initialize thread attributes (using defaults) and validate */
   handle_error_en (pthread_attr_init (&attr), "pthread_attr_init");
 
@@ -499,7 +505,7 @@ int main (int argc, char **argv) {
   handle_error_en (pthread_create (&id, &attr, signal_thread, &pwmgpio),
                    "pthread_create");
 
-  puts ("\nstarting PWM clock:");
+  puts ("\nenabling PWM soft-clock interval timer signal:");
   /* start interval timer to drive PWM */
   if (pwmclk_start (&pwmclk) == -1) {
     return 1;
