@@ -13,7 +13,9 @@ The result? A solid set of libraries to provide peripheral access using the kern
 
 There are three directories, `examples`, `lib` and `tst`. The `examples` directory holds examples using the various libraries that are in a complete enough state to simply `make` and then run (after configuring your hardware of course). All examples come from the testing directory `tst` where much of the development work is done. The `tst` directory contains many intermediate examples that show the progression of development. Many being simple examples that are a great resource to use to come up to speed on how the libraries work and what calls are needed to initialize, use and then stop, remove whatever library you are interested in.
 
-The `lib` directory contains all the access libraries for the peripherals. The install with `prefix=/usr/local` by default. The Pi OS provides the `staff` group that can own the files/directories in `/usr/local`. Configuring `/usr/local` that way and adding yourself to the `staff` group will allow you to maintain the files there without needing to be root, or use `sudo` or `su`. (you will still need root access to run `ldconfig` after installing or removing a library -- I can't help you there)
+The `lib` directory contains all the access libraries for the peripherals. The libraries install to `prefix=/usr/local` by default. The Pi OS provides the `staff` group that can own the files/directories in `/usr/local`. Configuring `/usr/local` that way and adding yourself to the `staff` group will allow you to maintain the files there without needing to be root, or use `sudo` or `su`. (you will still need root access to run `ldconfig` after installing or removing a library -- I can't help you there)
+
+Also add your user to the `gpio` group. (e.g. `sudo gpasswd -a you gpio`, then log out/in so group changes are seen by your environment) `/dev/gpiomem`, used by `tinygpio`, is group-owned by the `gpio` group.
 
 The primary libraries for peripheral access are:
 
