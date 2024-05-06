@@ -36,7 +36,7 @@ There are a few secondary libraries for specific board or feature access:
 The libraries are safe to include with both C and C++ sources. The intended way to use the libraries are simply to make and install the libraries in `/usr/local`. The `Makefile` for each has both `install` and `uninstall` rules. Simply:
 
 ```none
- $ cd to/lib/ofinteres
+ $ cd to/lib/ofinterest
  $ make
  $ sudo make install
 ```
