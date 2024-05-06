@@ -1,3 +1,9 @@
+/*
+ * NOTE: this example uses the GPIO V1 ABI for gpio access via ioctl(),
+ *       New code should be written to use the GPIO V2 ABI. See the header
+ *       linux/gpio.h for details and see the examples pwmsoftpth.c and
+ *       pwmsoftrgb.c for implementation of the V2 ABI strucs and macros.
+ */
 #include <stdio.h>
 #include <linux/gpio.h>
 #include <sys/ioctl.h>
@@ -9,8 +15,8 @@
 /* gpiochipX (0-4) depending on Pi model */
 #define GPIOCHIP "/dev/gpiochip0"
 
-#define GPIO_WR_PIN       5
-#define GPIO_RD_PIN       6
+#define GPIO_WR_PIN       23
+#define GPIO_RD_PIN       24
 
 // Termination flag.
 // This is not an example of good coding style.
@@ -137,6 +143,8 @@ int main (int argc, char * const *argv) {
       gpiofd;
   unsigned  cycles = 1000,
             delayns = 5000;
+  __u8  gpio_wr_pin = GPIO_WR_PIN,
+        gpio_rd_pin = GPIO_RD_PIN;
 
   // Elevate main thread priority and use a FIFO scheduler.
 
@@ -148,16 +156,30 @@ int main (int argc, char * const *argv) {
   struct gpiochip_info chip_info;
   struct gpiohandle_request handle_request;
 
-  if (argc > 1) {
+  if (argc > 1) {   /* write pin gpio */
+    __u8 tmp = 0;
+    if (sscanf (argv[1], "%hhu", &tmp) == 1) {
+      gpio_wr_pin = tmp;
+    }
+  }
+
+  if (argc > 2) {   /* read pin gpio */
+    __u8 tmp = 0;
+    if (sscanf (argv[2], "%hhu", &tmp) == 1) {
+      gpio_rd_pin = tmp;
+    }
+  }
+
+  if (argc > 3) {   /* delay between reads */
     unsigned tmp = 0;
-    if (sscanf (argv[1], "%u", &tmp) == 1) {
+    if (sscanf (argv[3], "%u", &tmp) == 1) {
       delayns = tmp;
     }
   }
 
-  if (argc > 2) {
+  if (argc > 4) {   /* number or rising and falling edges to count */
     unsigned tmp = 0;
-    if (sscanf (argv[2], "%u", &tmp) == 1) {
+    if (sscanf (argv[4], "%u", &tmp) == 1) {
       cycles = tmp;
     }
   }
@@ -177,7 +199,6 @@ int main (int argc, char * const *argv) {
     close (gpiofd);
     return 1;
   }
-
 
   printf ("GPIO chip information:\n"
           "name: %s\n"
@@ -199,10 +220,8 @@ int main (int argc, char * const *argv) {
     }
   }
 
-
-  // Request events on the reading line.
-
-  event_request.lineoffset = GPIO_RD_PIN;
+  /* Request events on the reading line. */
+  event_request.lineoffset = gpio_rd_pin;
   event_request.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
   event_request.handleflags = GPIOHANDLE_REQUEST_INPUT |
                               GPIOHANDLE_REQUEST_BIAS_PULL_DOWN;
@@ -219,7 +238,7 @@ int main (int argc, char * const *argv) {
   /* get gpio line even handle - for writing.
    * many can be requested instead of one.
    */
-  handle_request.lineoffsets[0] = GPIO_WR_PIN;
+  handle_request.lineoffsets[0] = gpio_wr_pin;
   handle_request.flags =  GPIOHANDLE_REQUEST_OUTPUT |
                           GPIOHANDLE_REQUEST_BIAS_PULL_DOWN;
   handle_request.lines = 1;

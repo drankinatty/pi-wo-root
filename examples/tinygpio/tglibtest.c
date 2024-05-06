@@ -32,6 +32,17 @@ void blink (unsigned pin,
   putchar ('\n');
 }
 
+/**
+ * @brief flash LED connected to gpio pin for on_usec microseconds HI and
+ * off_usec microseconds off a repeat number of times.
+ * @param argc argument count.
+ * @param argv argument vector (with optional arguments of):
+ *        argv[1] - gpio pin to use (4 default),
+ *        argv[2] - microseconds on per-flash    (default:  50,000),
+ *        argv[3] - microseconds off per-flash   (default: 200,000),
+ *        argv[4] - number of flashes to repeat  (default:      20).
+ * @return 0 - EXIT_SUCCESS (default), 1 - EXIT_FAILURE.
+ */
 int main (int argc, char **argv)
 {
   unsigned  pin = 4,            /* gpio pin               - argv[1] */

@@ -14,7 +14,7 @@
 int main (int argc, char **argv) {
 
   /* if argument given use pwm1, otherwise pwm0 by default*/
-  pwm_t pwm = { .pwmfs = argc > 1 ? PWM1FS: PWM0FS };   /* pwm struct instance */
+  pwm_t pwm = { .pwmfs = argc > 1 ? PWM1FS : PWM0FS };   /* pwm struct instance */
 
   if (argc > 1) {       /* set channel if not using default pwm0 */
     pwm.channel = 1;
