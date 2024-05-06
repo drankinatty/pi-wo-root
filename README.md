@@ -1,7 +1,7 @@
 # pi-wo-root
 **Raspberry Pi Peripheral Access Wtihout root**
 
-The Pi is a wonderful development platform, but using the Broadcom BCM2835 library for peripheral access has one major drawback -- you must run all executables as `root` due to its mmapping of `"/dev/mem"`. Not only does that pose security and access issues if your application is to be run by normal users, the direct memory access through `/dev/mem` has long been a route for any user to directly compromise the system, either intentionally, or through a careless bit-shift, index or write. Simply search "Why is direct access through `/dev/mem` a bad idea?" and you will find a wealth of reasons.
+The Pi is a wonderful development platform, but using the Broadcom BCM2835 library for peripheral access has one major drawback -- you must run all executables as `root` due to its mmapping of `"/dev/mem"`. Not only does that pose security and access issues if your application is to be run by normal users, the direct memory access through `/dev/mem` has long been a route for any user to directly compromise the system, either intentionally, or through a careless bit-shift, index or write. Simply search *"Why is direct access through `/dev/mem` a bad idea?"* and you will find a wealth of reasons.
 
 If the `/dev/mem` access were not bad enough, many of the older tools used with the Pi are now deprecated and removed from the current Raspberry Pi OS (WiringPi, etc..). Given the state of things we started with a goal of not requiring root access and to use to Linux kernel peripheral interfaces to access I2C, SPI, PWM, GPIO, etc...
 
@@ -43,8 +43,10 @@ The libraries are safe to include with both C and C++ sources. The intended way 
 
 Calling `ldconfig` and creating the normal libary symlinks are handled in the install.
 
-Then just include the header for the library in you source code and link against it during compile. (e.g. `#include <pwmsoft.h>` and then link against the library by providing `-lpwmsoft` as part of your compiler string) Most distributions include `/usr/local/include` as part of the default include search path. If not just add `-I/usr/local/include` to your compile string. And if `/usr/local/lib` isn't in your default library search path, just add `-L/usr/local/lib` as well. (you can simple edit the `Makefile` and add the include search path to `CFLAGS` and the library search path to `LDFLAGS`).
+Then just include the header for the library in you source code and link against it during compile. (e.g. `#include <pwmsoft.h>` and then link against the library by providing `-lpwmsoft` as part of your compiler string) Most distributions include `/usr/local/include` as part of the default include search path. If not just add `-I/usr/local/include` to your compile string. And if `/usr/local/lib` isn't in your default library search path, just add `-L/usr/local/lib` as well. (you can simply edit the `Makefile` and add the include search path to `CFLAGS` and the library search path to `LDFLAGS`).
 
 *Note:*
 
-I'll finish filling in this Readme, but all code builds with full warnings enabled (e.g. with `-Wall -Wextra -pedantic -Wshadow -std=c11 ...` and should not have any glaring issues. The primary library code should be heavily commented to help with the learning process. If you find a bug, open an issue, or create a pull-request and provide a proposed fix. Enjoy the libraries.
+These libraries have been tested on Raspberry Pi Zero, 2, 3, 4. While they should work with the Pi 5 as well, no hardware was available to test.
+
+This Readme is a work in progress, but all code builds with full warnings enabled (e.g. with `-Wall -Wextra -pedantic -Wshadow -std=c11 ...` and should not have any glaring issues. (that's not to suggest the libraries or bug-free or cannot be further improved) The primary library code is heavily commented to help with the learning process. If you find a bug, open an issue, or create a pull-request and provide a proposed fix. Enjoy the libraries.
