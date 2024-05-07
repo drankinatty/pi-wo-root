@@ -252,12 +252,12 @@ static int timers_start (uint64_t ns_to_start, uint64_t ns_mpu_read, uint64_t ns
   sigrt_mpu_sample = it0.signo;     /* update global values */
   sigrt_mpu_output = it1.signo;
 
-  if (itimer_start_timer (&it0) == 0) {   /* start reading mpu */
+  if (itimer_start_timer (&it0) == -1) {   /* start reading mpu */
     fputs ("error: itimer_start_timer it0 - mpu read\n", stderr);
     return 1;
   }
 
-  if (itimer_start_timer (&it1) == 0) {   /* start mpu output */
+  if (itimer_start_timer (&it1) == -1) {   /* start mpu output */
     fputs ("error: itimer_start_timer it1 - oled_write\n", stderr);
     return 1;
   }

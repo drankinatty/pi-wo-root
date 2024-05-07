@@ -354,7 +354,7 @@ static int start_page_2_timer (uint64_t ns_to_start, uint64_t ns_oled_page2)
 
   sigrt_oled_page2 = it2.signo;   /* set global real-time signal no. */
 
-  if (itimer_start_timer (&it2) == 0) {   /* start page2 output timer */
+  if (itimer_start_timer (&it2) == -1) {   /* start page2 output timer */
     fputs ("error: itimer_start_timer it2 - oled_page2\n", stderr);
     return 1;
   }

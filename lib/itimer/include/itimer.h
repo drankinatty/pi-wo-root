@@ -39,39 +39,35 @@ itimer itimer_create_timer (uint64_t ns_to_start, int64_t ns_interval,
 /**
  * @brief start interval timer 'it'.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
- *
- * @todo change return to make consistent with most others returning 0
- * on success -1 otherwise. check impact and changes needed by current
- * code.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_start_timer (itimer *it);
 
 /**
  * @brief stop interval timer 'it'.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_stop_timer (itimer *it);
 
 /**
  * @brief prevent timer signal from firing by masking signal no.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_block_timer (itimer *it);
 
 /**
  * @brief unblocks timer signal previously blocked by itimer_block_timer.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_unblock_timer (itimer *it);
 
 /**
  * @brief disable and delete itimer interval timer and restore signo to pool.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_delete_timer (itimer *it);
 

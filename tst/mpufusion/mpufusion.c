@@ -220,7 +220,7 @@ static int mpu_start (int argc, char **argv)
 
   puts ("mpu_init_default - succeeded - mpu9250 identified and initialized");
 
-  if (!ak8963_initialize (&mpu)) {
+  if (!ak8963_initialize (&mpu, i2cdev)) {
     puts ("ak8963_initialize - failed");
     printf ("I2C Setup failed for ak8963 device '%s', fd: %d\n",
             i2cdev, mpu.magfd);
@@ -261,12 +261,12 @@ static int timers_start (void)
   sigrt_mpu_read_raw = it0.signo;     /* update global values */
   sigrt_fusion_write = it1.signo;
 
-  if (itimer_start_timer (&it0) == 0) {   /* start reading mpu */
+  if (itimer_start_timer (&it0) == -1) {   /* start reading mpu */
     fputs ("error: itimer_start_timer it0 - mpu read\n", stderr);
     return 1;
   }
 
-  if (itimer_start_timer (&it1) == 0) {   /* start mpu output */
+  if (itimer_start_timer (&it1) == -1) {   /* start mpu output */
     fputs ("error: itimer_start_timer it1 - oled_write\n", stderr);
     return 1;
   }

@@ -40,8 +40,7 @@ static int8_t itimer_get_rts_from_pool (void)
  *
  * @param sig the SIGRTnum being release for reuse.
  *
- * @return zero is returned on success, -1 if sig is out
- * of range.
+ * @return zero is returned on success, -1 if sig is out of range.
  */
 static int8_t itimer_return_rts_to_pool (int sig)
 {
@@ -122,11 +121,7 @@ itimer itimer_create_timer (uint64_t ns_to_start, int64_t ns_interval,
 /**
  * @brief start interval timer 'it'.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
- *
- * @todo change return to make consistent with most others returning 0
- * on success -1 otherwise. check impact and changes needed by current
- * code.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_start_timer (itimer *it)
 {
@@ -134,23 +129,25 @@ int itimer_start_timer (itimer *it)
   if (it->signo < 0) {
     fputs ("error: itimer_start_timer struct parameter invalid signo.\n",
             stderr);
-    return 0;
+    return -1;
   }
 
   /* start timer */
   if (timer_settime (it->timerid, 0, &it->its, NULL) == -1) {
     perror ("timer_settime - timerid");
-    return 0;
+    return -1;
   }
 
-  return it->enabled = 1;
+  it->enabled = 1;
+
+  return 0;
 }
 
 
 /**
  * @brief stop interval timer 'it'.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_stop_timer (itimer *it)
 {
@@ -160,25 +157,25 @@ int itimer_stop_timer (itimer *it)
   if (it->signo < 0) {
     fputs ("error: itimer_start_timer struct parameter invalid signo.\n",
             stderr);
-    return 0;
+    return -1;
   }
 
   /* stop timer by setting interval time zero */
   if (timer_settime (it->timerid, 0, &its, NULL) == -1) {
     perror ("timer_settime - timerid");
-    return 0;
+    return -1;
   }
 
   it->enabled = 0;
 
-  return 1;
+  return 0;
 }
 
 
 /**
  * @brief prevent timer signal from firing by masking signal no.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_block_timer (itimer *it)
 {
@@ -188,17 +185,17 @@ int itimer_block_timer (itimer *it)
   sigaddset (&mask, it->signo);
   if (sigprocmask (SIG_SETMASK, &mask, NULL) == -1) {
     perror ("sigprocmask SIG_SETMASK");
-    return 0;
+    return -1;
   }
 
-  return 1;
+  return 0;
 }
 
 
 /**
  * @brief unblocks timer signal previously blocked by itimer_block_timer.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_unblock_timer (itimer *it)
 {
@@ -208,17 +205,17 @@ int itimer_unblock_timer (itimer *it)
   sigaddset (&mask, it->signo);
   if (sigprocmask (SIG_UNBLOCK, &mask, NULL) == -1) {
     perror ("sigprocmask SIG_UNBLOCK");
-    return 0;
+    return -1;
   }
 
-  return 1;
+  return 0;
 }
 
 
 /**
  * @brief disable and delete itimer interval timer and restore signo to pool.
  * @param it itimer struct returned by itimer_create_timer.
- * @return returns 1 on success, 0 otherwise.
+ * @return returns 0 on success, -1 otherwise.
  */
 int itimer_delete_timer (itimer *it)
 {
@@ -232,12 +229,12 @@ int itimer_delete_timer (itimer *it)
 
   if (timer_delete (it->timerid) == -1) {
     perror ("timer_delete");
-    return 0;
+    return -1;
   }
   it->timerid = 0;
 
   itimer_return_rts_to_pool (it->signo);
   it->signo = 0;
 
-  return 1;
+  return 0;
 }

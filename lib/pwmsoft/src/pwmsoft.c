@@ -118,7 +118,7 @@ int pwmclk_start (pwmclk_t *pwmclk)
   }
 
   /* start timer for PWM and validate */
-  if (itimer_start_timer (&pwmclk->clock) == 0) {
+  if (itimer_start_timer (&pwmclk->clock) == -1) {
     fputs ("error: pwmclk_start() failed to start itimer.\n", stderr);
     return -1;
   }
@@ -153,7 +153,7 @@ int pwmclk_delete (pwmclk_t *pwmclk)
 {
   pwmclk_stop (pwmclk);
 
-  if (itimer_delete_timer (&pwmclk->clock) == 0) {
+  if (itimer_delete_timer (&pwmclk->clock) == -1) {
     return -1;
   }
 
