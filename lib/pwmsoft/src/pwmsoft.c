@@ -1,3 +1,9 @@
+/**
+ *  Software PWM utilizing gpio_v2 ioctl and lib pthread for Raspberry Pi
+ *
+ *  Copyright (c) David C. Rankin, 2022-2024
+ *  License: GPLv2
+ */
 #include <stdio.h>
 #include <stdlib.h>
 

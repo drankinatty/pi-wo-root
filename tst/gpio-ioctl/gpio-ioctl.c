@@ -29,13 +29,12 @@ volatile int TERM = 0;
 
 struct gpioevent_request event_request;
 
-struct pollfd pollreadfd;
-
 
 void *reader (void *arg)
 {
-  // Elevate reader thread priority and use a FIFO scheduler.
+  struct pollfd pollreadfd;
 
+  /* Elevate reader thread priority and use a FIFO scheduler. */
   pthread_t thread = pthread_self();
   const struct sched_param sparam = { .sched_priority = 99, };
   int res = pthread_setschedparam (thread, SCHED_FIFO, &sparam);

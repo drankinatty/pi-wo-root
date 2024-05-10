@@ -1,3 +1,9 @@
+/**
+ *  Interval timer library for Raspberry Pi
+ *
+ *  Copyright (c) David C. Rankin, 2022-2024
+ *  License: GPLv2
+ */
 #include <itimer.h>
 
 /**
