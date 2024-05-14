@@ -48,6 +48,35 @@ typedef struct {
 
 
 /**
+ * @brief outputs usage for command line arguments and if err nonzero exits.
+ * @param argv program argument vector with executable name as 1st element.
+ * @param err if non-zero, exit program with return of EXIT_FAILURE.
+ */
+void usage (char * const *argv, __u8 err)
+{
+  printf ("\nCommand line argument usage (with defaults shown)\n\n"
+          "  %s [ write_pin (23) read_pin (24) "
+          "cycles (1000) delayns (5000) ]\n\n", argv[0]);
+
+  if (err) {
+    exit (EXIT_FAILURE);
+  }
+}
+
+
+/**
+ * @brief wrapper for usage outputting provided error message before usage.
+ * @param argv program argument vector with executable name as 1st element.
+ * @param errmsg text to write on stderr following "error: ".
+ */
+void usage_err (char * const *argv, const char *errmsg)
+{
+  fprintf (stderr, "error: %s\n", errmsg);
+  usage (argv, 1);
+}
+
+
+/**
  * @brief set the pins for ioctl linereq from the npins specified in pinarr.
  * @param gpio pointer to struct containing pointers to gpio_vs data
  * structures use by ioctl.
@@ -237,7 +266,9 @@ void *threadfn_reader (void *data)
     }
 
     if (nfds == 0) {  /* timeout occurred */
+#ifdef DEBUG
       fputs ("poll - timeout", stderr);
+#endif
       writing = 0;
       break;
     }
@@ -406,30 +437,34 @@ int main (int argc, char * const *argv) {
   /* process command line arguments */
   if (argc > 1) {   /* write pin gpio */
     __u8 tmp = 0;
-    if (sscanf (argv[1], "%hhu", &tmp) == 1) {
-      gpio_wr_pin = tmp;
+    if (sscanf (argv[1], "%hhu", &tmp) != 1) {
+      usage_err (argv, "invalid unsigned byte value provided for write pin");
     }
+    gpio_wr_pin = tmp;
   }
 
   if (argc > 2) {   /* read pin gpio */
     __u8 tmp = 0;
-    if (sscanf (argv[2], "%hhu", &tmp) == 1) {
-      gpio_rd_pin = tmp;
+    if (sscanf (argv[2], "%hhu", &tmp) != 1) {
+      usage_err (argv, "invalid unsigned byte value provided for read pin");
     }
+    gpio_rd_pin = tmp;
   }
 
-  if (argc > 3) {   /* delay between reads */
+  if (argc > 3) {   /* number or rising and falling edges to count */
     unsigned tmp = 0;
-    if (sscanf (argv[3], "%u", &tmp) == 1) {
-      delayns = tmp;
+    if (sscanf (argv[3], "%u", &tmp) != 1) {
+      usage_err (argv, "invalid unsigned value provided for no. of cycles");
     }
+    cycles = tmp;
   }
 
-  if (argc > 4) {   /* number or rising and falling edges to count */
+  if (argc > 4) {   /* delay between reads */
     unsigned tmp = 0;
-    if (sscanf (argv[4], "%u", &tmp) == 1) {
-      cycles = tmp;
+    if (sscanf (argv[4], "%u", &tmp) != 1) {
+      usage_err (argv, "invalid unsigned value provided for delay (ns)");
     }
+    delayns = tmp;
   }
 
   /**
@@ -498,8 +533,9 @@ int main (int argc, char * const *argv) {
    *  write to write pin providing edges for reader
    */
 
-  printf ("-------------- now writing and reading -------------------\n"
-          "delay (ns) : %u\n\n", delayns);
+  printf ("-------------- now writing and reading -------------------\n\n"
+          "  cycles     : %u\n"
+          "  delay (ns) : %u\n\n", cycles, delayns);
 
   ts.tv_nsec = delayns;     /* set pin write time between edges delay */
 
