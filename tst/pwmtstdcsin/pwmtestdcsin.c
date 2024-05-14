@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include <linux/types.h>
+#include <math.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -19,7 +20,35 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "pwm.h"
+#define PWM_CLOCK       100000000
+
+#ifdef MILKVFS
+#define PWMCHANNELS     16
+#else
+#define PWMCHANNELS     2
+#endif
+
+#define PWMCHIP         "/sys/class/pwm/pwmchip"
+#define PWMPATHMAX      64
+
+#define TMPBUFSZ        16
+
+
+/**
+ * @struct pwm_t
+ *
+ * @brief struct containing PWM channel settings.
+ */
+typedef struct {
+  float       frequency;    /**< PWM frequency (Hz) (periods per-sec) */
+  __u32       duty_cycle,   /**< PWM duty cycle (0 <= duty_cycle <= period) */
+              period;       /**< PWM period (nanoseconds between rollover) */
+
+  int         fddc;         /**< duty_cycle file descriptor, manually opened */
+
+  __u8        channel,      /**< PWM channel  ( 0-15 board dependent ) */
+              enabled;      /**< PWM channel enabled (1 - enabled, 0 - not) */
+} pwm_t;
 
 
 /**
@@ -400,4 +429,187 @@ int pwm_enable_pwm (pwm_t *pwm, __u8 enabled)
   pwm->enabled = (__u8)enabled;       /* set enabled in pwm struct */
 
   return 0;                           /* return success */
+}
+
+
+void prn_pwm_state (pwm_t *pwm)
+{
+  char pwmdev[PWMPATHMAX],
+       exportdev[PWMPATHMAX],
+       unexportdev[PWMPATHMAX],
+       period[PWMPATHMAX],
+       duty_cycle[PWMPATHMAX],
+       enable[PWMPATHMAX];
+  __u8 chip = pwm->channel - pwm->channel % 4;
+
+  sprintf (pwmdev, "%s%hhu/pwm%hhu", PWMCHIP, chip, pwm->channel % 4);
+  sprintf (exportdev, "%s%hhu/export", PWMCHIP, chip);
+  sprintf (unexportdev, "%s%hhu/unexport", PWMCHIP, chip);
+  sprintf (period, "%s%hhu/pwm%hhu/period", PWMCHIP, chip, pwm->channel % 4);
+  sprintf (duty_cycle, "%s%hhu/pwm%hhu/duty_cycle", PWMCHIP, chip, pwm->channel % 4);
+  sprintf (enable, "%s%hhu/pwm%hhu/enable", PWMCHIP, chip, pwm->channel % 4);
+
+  printf ("\ncurrent state of pwm:\n\n"
+          "  pwm->sysfs         : %s\n"
+          "  pwm->exportfs      : %s\n"
+          "  pwm->unexportfs    : %s\n"
+          "  pwm->periodfs      : %s\n"
+          "  pwm->duty_cyclefs  : %s\n"
+          "  pwm->enablefs      : %s\n"
+          "  pwm->period        : %u\n"
+          "  pwm->frequency     : %.2f Hz\n"
+          "  pwm->duty_cycle    : %u\n"
+          "  pwm->enable        : %hhu\n",
+          pwmdev, exportdev, unexportdev, period, duty_cycle, enable,
+          pwm->period, pwm->frequency, pwm->duty_cycle, pwm->enabled);
+}
+
+
+void prn_cmdline (char **argv)
+{
+  printf ("\nprogram command line: [ pwm_chan (0) ] [ delayns (30000) ] "
+          "[ PI iterations (24) ]\n\n"
+          "  %s", argv[0]);
+  printf (argv[1] ? " %s" : " [ (%s) ]", argv[1] ? argv[1] : "0");
+  printf ((argv[1] && argv[2]) ? " %s" : " [ (%s) ]",
+          (argv[1] && argv[2]) ? argv[2] : "30000");
+  printf ((argv[1] && argv[2] && argv[3]) ? " %s\n" : " [ (%s) ]\n",
+          (argv[1] && argv[2] && argv[3]) ? argv[3] : "24");
+}
+
+int main (int argc, char **argv) {
+
+  pwm_t pwm = { .frequency = 0 };   /* pwm struct instance */
+  char buf[PWMPATHMAX];
+  unsigned  delay = 30000,
+            revs = 24;
+
+
+  if (argc > 1) {
+    __u8 tmp = 0;
+    if (sscanf (argv[1], "%hhu", &tmp) != 1 && tmp >= PWMCHANNELS) {
+      fprintf (stderr, "error: argument %hhu exceeds PWMCHANNELS %hhu.\n",
+              tmp, PWMCHANNELS);
+      return 1;
+    }
+    pwm.channel = tmp;
+  }
+  sprintf (buf, "%s%hhu/pwm%hhu", PWMCHIP, pwm.channel - pwm.channel % 4,
+          pwm.channel % 4);
+
+  if (pwm_set_channel (&pwm, pwm.channel) == -1) {
+    return 1;
+  }
+
+  /* validate pwmX sysfs file exists */
+  if (dir_exists (buf) == -1) {
+    /* otherwise export the PWM channel */
+    if (pwm_export (&pwm) == -1) {
+      return 1;
+    }
+    usleep (50000);     /* give time for sysfs to propogate export qchange */
+  }
+
+  if (argc > 2) {   /* delay argument */
+    unsigned tmp;
+    if (sscanf (argv[2], "%u", &tmp) != 1) {
+      fprintf (stderr, "error: invalid unsigned delay value for argv[1] (%s)\n",
+              argv[2]);
+      return 1;
+    }
+    delay = tmp;
+  }
+
+  if (argc > 3) {   /* revolution argument */
+    unsigned tmp;
+    if (sscanf (argv[3], "%u", &tmp) != 1) {
+      fprintf (stderr, "error: invalid unsigned revs value for argv[1] (%s)\n",
+              argv[3]);
+      return 1;
+    }
+    revs = tmp;
+  }
+
+
+  prn_cmdline (argv);       /* show program command line */
+
+  /* set period (2500 Hz Frequency), duty_cycle and enable pwm */
+  if (pwm_set_period (&pwm, 400000) == -1) {   /* set pwm period */
+    return 1;
+  }
+
+  if (pwm_enable_pwm (&pwm, 1) == -1) {        /* enable pwm on channel */
+    return 1;
+  }
+
+  prn_pwm_state (&pwm);                        /* dump pwm state */
+
+  /* open duty_cycle file for repeated writes */
+  if (pwm_open_duty_cycle (&pwm) == -1) {
+    return 1;
+  }
+
+  /* output current operation */
+  printf ("\noutput duty cycle based on value of sin() from 0 - 2PI, "
+          "%u revolusions\n", revs / 2);
+
+  /* cycle duty cycle from based on output of sin() phase shifted -M_PI_2
+   * to begin at 0 and amplitude reduced by 1/2 (bounded -1/2 to 1/2) and
+   * biased high by 1/2 so values are bounded 0 - 1.
+   */
+  for (float dc = 0; dc < revs * M_PI; dc += 0.1) {
+    float sindc = 0.5f * sinf (dc - M_PI_2) + 0.5f,
+          // pct = fabsf (sindc * 100.f);
+          pct = sindc * 100.f;
+
+ #ifdef SHOWCALC
+   printf ("dc : %6.2f,  sindc : %.2f,  pct : %6.2f\n", dc, sindc, pct);
+#endif
+
+    if (pwm_write_duty_cycle_pct (&pwm, pct) == -1) {
+      pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
+      return -1;
+    }
+#ifdef DEBUG
+    printf ("percent: %3u,  duty_cycle: %u\n", dc, pwm.duty_cycle);
+#endif
+    usleep (delay);
+  }
+
+  puts ("\nfull duty cycle iteration 0->100->0%, 1/20th sec delay "
+        "(10 sec)");
+
+  /* cycle duty cycle from 0 -> 100%, 50 msec delay */
+  for (__u32 dc = 0; dc < 100; dc += 1) {
+    if (pwm_write_duty_cycle_pct (&pwm, dc) == -1) {
+      pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
+      return -1;
+    }
+#ifdef DEBUG
+    printf ("percent: %3u,  duty_cycle: %u\n", dc, pwm.duty_cycle);
+#endif
+    usleep (50000);
+  }
+  /* cycle duty_cycle from 100 -> 0%, 50 msec delay */
+  for (int32_t dc = 100; dc >= 0; dc -= 1) {
+    if (pwm_write_duty_cycle_pct (&pwm, dc) == -1) {
+      pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
+      return -1;
+    }
+#ifdef DEBUG
+    printf ("percent: %3u,  duty_cycle: %u\n", dc, pwm.duty_cycle);
+#endif
+    usleep (50000);
+  }
+
+  /* close channel duty_cycle file, set file descriptor zero */
+  if (pwm_close_duty_cycle (&pwm) == -1) {
+    return -1;
+  }
+
+  pwm_enable_pwm (&pwm, 0);      /* disable pwm */
+
+  pwm_unexport (&pwm);           /* unexport the bus/channel */
+
+  puts ("\nsuccess");
 }

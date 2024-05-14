@@ -63,7 +63,9 @@ int dir_exists (const char *dir)
       fd = open (dir, flags, mode);
 
   if (fd < 0) {       /* directory does not exist */
+#ifdef DEBUG
     perror ("dir_exists");
+#endif
     return -1;
   }
   else if (fd) {      /* directory exists, rtn fd */

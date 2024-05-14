@@ -12,37 +12,37 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <linux/types.h>
 
-#define PWM_TMPSIZE     16
-#define PWM_MAXPATH     128
 
 #define PWM_CLOCK       100000000
 
-#define EXPORTDEV       "/sys/class/pwm/pwmchip0/export"
-#define UNEXPORTDEV     "/sys/class/pwm/pwmchip0/unexport"
+#ifdef MILKVFS
+#define PWMCHANNELS     16
+#else
+#define PWMCHANNELS     2
+#endif
 
-#define PWM0FS          "/sys/class/pwm/pwmchip0/pwm0"
-#define PWM1FS          "/sys/class/pwm/pwmchip0/pwm1"
+#define PWMCHIP         "/sys/class/pwm/pwmchip"
+#define PWMPATHMAX      64
 
-#define PWMPERIOD       "period"
-#define PWMDUTYCYCLE    "duty_cycle"
-#define PWMENABLE       "enable"
+#define TMPBUFSZ        16
 
 
 /**
+ * @struct pwm_t
+ *
  * @brief struct containing PWM channel settings.
  */
 typedef struct {
-  const char  *pwmfs;       /* pointer to PWM sysfs file */
+  float       frequency;    /**< PWM frequency (Hz) (periods per-sec) */
+  __u32       duty_cycle,   /**< PWM duty cycle (0 <= duty_cycle <= period) */
+              period;       /**< PWM period (nanoseconds between rollover) */
 
-  float       frequency;    /* PWM frequency (Hz) (periods per-sec) */
-  uint32_t    duty_cycle,   /* PWM duty cycle (0 <= duty_cycle <= period) */
-              period;       /* PWM period (nanoseconds between rollover) */
+  int         fddc;         /**< duty_cycle file descriptor, manually opened */
 
-  int         fddc;         /* duty_cycle file descriptor if manually opened */
-
-  uint8_t     channel,      /* PWM channel (0 - pwm0, 1 - pwm1) */
-              enabled;      /* PWM channel enabled (1 - enabled, 0 - not) */
+  __u8        channel,      /**< PWM channel  ( 0-15 board dependent ) */
+              enabled;      /**< PWM channel enabled (1 - enabled, 0 - not) */
 } pwm_t;
 
 
@@ -53,6 +53,16 @@ typedef struct {
  * @return returns 0 on success, -1 otherwise.
  */
 int dir_exists (const char *dir);
+
+
+/**
+ * @brief pwm_set_channel constructs string-literal from PWMPATH assigning
+ * retuls to pwmfs member of struct, and sets chip and channel members.
+ * @param pwm pointer to pwm_t struct to hold values.
+ * @param chan pwm channel to construct devfs path to open.
+ * @return returns 0 on success, -1 otherwise.
+ */
+int pwm_set_channel (pwm_t *pwm, __u8 chan);
 
 
 /**
@@ -74,11 +84,11 @@ int pwm_unexport (pwm_t *pwm);
 /**
  * @brief set the PWM period for channel in pwm struct, update period in struct.
  * @param pwm pointer to pwm struct for channel to set period for.
- * @param period pwm period in nanoseconds for Linux sysfs file.
+ * @param period pwm period in samples within the 1E9 MHz PWM_CLOCK.
  * @note all sysfs values must be written as character strings.
  * @return returns 0 on success, -1 otherwise.
  */
-int pwm_set_period (pwm_t *pwm, uint32_t period);
+int pwm_set_period (pwm_t *pwm, __u32 period);
 
 
 /**
@@ -87,7 +97,7 @@ int pwm_set_period (pwm_t *pwm, uint32_t period);
  * @param frequency no. of PWM signals (Hz), 25 MHz sane limit for 3b+/zero.
  * @return returns 0 on success, -1 otherwise.
  */
-int pwm_set_frequency (pwm_t *pwm, uint32_t frequency);
+int pwm_set_frequency (pwm_t *pwm, __u32 frequency);
 
 
 /**
@@ -95,7 +105,7 @@ int pwm_set_frequency (pwm_t *pwm, uint32_t frequency);
  * @param pwm pointer to pwm struct for channel to open duty_cycle.
  * @return returns 0 on success, -1 otherwise.
  */
-int sysfs_open_duty_cycle (pwm_t *pwm);
+int pwm_open_duty_cycle (pwm_t *pwm);
 
 
 /**
@@ -103,16 +113,16 @@ int sysfs_open_duty_cycle (pwm_t *pwm);
  * @param pwm pointer to pwm struct for channel to fd for.
  * @return returns 0 on success, -1 otherwise.
  */
-int sysfs_close_duty_cycle (pwm_t *pwm);
+int pwm_close_duty_cycle (pwm_t *pwm);
 
 
 /**
- * @brief write duty cycle for pwm channel to open sysfs duty_cycle file.
+ * @brief write duty cycle for pwm channel to sysfs duty_cycle file.
  * @param pwm pointer to pwm struct for channel to write duty_cycle for.
  * @param duty_cycle fraction of period in nanoseconds for signal high.
  * @return returns 0 on success, -1 otherwise.
  */
-int pwm_write_duty_cycle (pwm_t *pwm, uint32_t duty_cycle);
+int pwm_write_duty_cycle (pwm_t *pwm, __u32 duty_cycle);
 
 
 /**
@@ -133,7 +143,7 @@ int pwm_write_duty_cycle_pct (pwm_t *pwm, float pct);
  * @note all sysfs values must be written as character strings.
  * @return
  */
-int pwm_set_duty_cycle (pwm_t *pwm, uint32_t duty_cycle);
+int pwm_set_duty_cycle (pwm_t *pwm, __u32 duty_cycle);
 
 
 /**
@@ -153,7 +163,7 @@ int pwm_set_duty_cycle_pct (pwm_t *pwm, float pct);
  * @note all sysfs values must be written as character strings.
  * @return returns 0 on success, -1 otherwise.
  */
-int pwm_enable_pwm (pwm_t *pwm, uint8_t enabled);
+int pwm_enable_pwm (pwm_t *pwm, __u8 enabled);
 
 
 #ifdef __cplusplus

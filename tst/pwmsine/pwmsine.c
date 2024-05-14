@@ -25,43 +25,55 @@ float rad2deg (float rad)
 
 int main (int argc, char **argv) {
 
-  /* if argument given use pwm1, otherwise pwm0 by default*/
-  pwm_t pwm = { .pwmfs = argc > 3 ? PWM1FS : PWM0FS };
-
+  pwm_t pwm = { .frequency = 0 };   /* pwm struct instance */
+  char buf[PWMPATHMAX];
   unsigned  delay = 30000,
-            revs = 12;
+            revs = 24;
 
-  if (argc > 1) {   /* delay argument */
-    unsigned tmp;
-    if (sscanf (argv[1], "%u", &tmp) != 1) {
-      fprintf (stderr, "error: invalid unsigned delay value for argv[1] (%s)\n",
-              argv[1]);
+
+  if (argc > 1) {
+    __u8 tmp = 0;
+    if (sscanf (argv[1], "%hhu", &tmp) != 1 && tmp >= PWMCHANNELS) {
+      fprintf (stderr, "error: argument %hhu exceeds PWMCHANNELS %hhu.\n",
+              tmp, PWMCHANNELS);
       return 1;
     }
-    delay = tmp;
+    pwm.channel = tmp;
   }
+  sprintf (buf, "%s%hhu/pwm%hhu", PWMCHIP, pwm.channel - pwm.channel % 4,
+          pwm.channel % 4);
 
-  if (argc > 2) {   /* revolution argument */
-    unsigned tmp;
-    if (sscanf (argv[2], "%u", &tmp) != 1) {
-      fprintf (stderr, "error: invalid unsigned revs value for argv[1] (%s)\n",
-              argv[2]);
-      return 1;
-    }
-    revs = tmp;
-  }
-
-  if (argc > 3) {       /* set channel if not using default pwm0 */
-    pwm.channel = 1;
+  if (pwm_set_channel (&pwm, pwm.channel) == -1) {
+    return 1;
   }
 
   /* validate pwmX sysfs file exists */
-  if (dir_exists (pwm.pwmfs) == -1) {
+  if (dir_exists (buf) == -1) {
     /* otherwise export the PWM channel */
     if (pwm_export (&pwm) == -1) {
       return 1;
     }
     usleep (50000);     /* give time for sysfs to propogate export qchange */
+  }
+
+  if (argc > 2) {   /* delay argument */
+    unsigned tmp;
+    if (sscanf (argv[2], "%u", &tmp) != 1) {
+      fprintf (stderr, "error: invalid unsigned delay value for argv[1] (%s)\n",
+              argv[2]);
+      return 1;
+    }
+    delay = tmp;
+  }
+
+  if (argc > 3) {   /* revolution argument */
+    unsigned tmp;
+    if (sscanf (argv[3], "%u", &tmp) != 1) {
+      fprintf (stderr, "error: invalid unsigned revs value for argv[1] (%s)\n",
+              argv[3]);
+      return 1;
+    }
+    revs = tmp;
   }
 
   /* set period, duty_cycle and enable pwm */
@@ -80,11 +92,11 @@ int main (int argc, char **argv) {
           "  pwm.enabled    : %hhu\n"
           "  delay          : %u\n"
           "  revolutions    : %u\n",
-          pwm.pwmfs, pwm.period, pwm.frequency,
+          buf, pwm.period, pwm.frequency,
           pwm.duty_cycle, pwm.enabled, delay, revs);
 
   /* open duty_cycle file for repeated writes */
-  if (sysfs_open_duty_cycle (&pwm) == -1) {
+  if (pwm_open_duty_cycle (&pwm) == -1) {
     return -1;
   }
 
@@ -109,7 +121,7 @@ int main (int argc, char **argv) {
   }
 
   /* close channel duty_cycle file, set file descriptor zero */
-  if (sysfs_close_duty_cycle (&pwm) == -1) {
+  if (pwm_close_duty_cycle (&pwm) == -1) {
     return -1;
   }
 

@@ -13,15 +13,25 @@
 
 int main (int argc, char **argv) {
 
-  /* if argument given use pwm1, otherwise pwm0 by default*/
-  pwm_t pwm = { .pwmfs = argc > 1 ? PWM1FS : PWM0FS };   /* pwm struct instance */
+  char buf[PWMPATHMAX];     /* temp buffer to hold pwm sysfs pathname */
 
-  if (argc > 1) {       /* set channel if not using default pwm0 */
-    pwm.channel = 1;
+  /* if argument given use pwm1, otherwise pwm0 by default*/
+  pwm_t pwm = { .frequency = 0 };   /* pwm struct instance */
+
+  if (argc > 1) {
+    __u8 tmp = 0;
+    if (sscanf (argv[1], "%hhu", &tmp) != 1 && tmp >= PWMCHANNELS) {
+      fprintf (stderr, "error: argument %hhu exceeds PWMCHANNELS %hhu.\n",
+              tmp, PWMCHANNELS);
+      return 1;
+    }
+    pwm.channel = tmp;
   }
+  sprintf (buf, "%s%hhu/pwm%hhu", PWMCHIP, pwm.channel - pwm.channel % 4,
+          pwm.channel % 4);
 
   /* validate pwmX sysfs file exists */
-  if (dir_exists (pwm.pwmfs) == -1) {
+  if (dir_exists (buf) == -1) {
     /* otherwise export the PWM channel */
     if (pwm_export (&pwm) == -1) {
       return 1;
@@ -45,7 +55,7 @@ int main (int argc, char **argv) {
           "  pwm.frequency  : %.2f Hz\n"
           "  pwm.duty_cycle : %u\n"
           "  pwm.enabled    : %hhu\n",
-          pwm.pwmfs, pwm.period, pwm.frequency,
+          buf, pwm.period, pwm.frequency,
           pwm.duty_cycle, pwm.enabled);
 
   /* NOTE: for excessive changes to duty_cycle it is better to simply
