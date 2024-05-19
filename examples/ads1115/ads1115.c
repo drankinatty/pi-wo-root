@@ -13,9 +13,9 @@ const char *i2cdev[2] = { "/dev/i2c-0", "/dev/i2c-1" };
 const int delay[8] = { 126000, 63500, 32250, 16625, 8812, 5000, 3100, 2162 };
 
 #ifdef MILKVFS
-#define SPIBUS    0
+#define I2CBUS    0
 #else
-#define SPIBUS    1
+#define I2CBUS    1
 #endif
 
 
@@ -179,7 +179,7 @@ int main (int argc, char **argv) {
 #endif
 
   /* open i2c device file save file descriptor and i2c address to struct */
-  if (ads_i2c_init (&ads, i2cdev[SPIBUS], ADDR_GND) == -1) {
+  if (ads_i2c_init (&ads, i2cdev[I2CBUS], ADDR_GND) == -1) {
     return 1;
   }
 

@@ -4,7 +4,10 @@ CC = gcc
 
 CFLAGS += -Wall -Wextra -pedantic -Wshadow -std=c11
 CFLAGS += -D_GNU_SOURCE
+# enable debug output
 #CFLAGS += -DDEBUG
+# disable ANSI escapes
+#CFLAGS += -DNOANSI
 
 LDFLAGS += -lpwm
 

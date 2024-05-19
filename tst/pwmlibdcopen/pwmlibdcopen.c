@@ -71,6 +71,9 @@ int main (int argc, char **argv) {
       pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
       return -1;
     }
+#ifndef NOANSI
+    printf ("\x1b[2A\x1b[19C\x1b[0K%u\n\n", (pwm.duty_cycle * 100) / pwm.period);
+#endif
 #ifdef DEBUG
     printf ("percent: %3u,  duty_cycle: %u\n", dc, pwm.duty_cycle);
 #endif
@@ -82,6 +85,9 @@ int main (int argc, char **argv) {
       pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
       return -1;
     }
+#ifndef NOANSI
+    printf ("\x1b[2A\x1b[19C\x1b[0K%u\n\n", (pwm.duty_cycle * 100) / pwm.period);
+#endif
 #ifdef DEBUG
     printf ("percent: %3u,  duty_cycle: %u\n", dc, pwm.duty_cycle);
 #endif
@@ -93,9 +99,14 @@ int main (int argc, char **argv) {
     return -1;
   }
 
-  pwm_enable_pwm (&pwm, 0);      /* disable pwm */
+  pwm_enable_pwm (&pwm, 0);           /* disable pwm */
+#ifndef NOANSI
+  printf ("\x1b[1A\x1b[19C\x1b[0K%hhu\n", pwm.enabled);
+#endif
+
+  if (pwm_unexport (&pwm) == -1) {    /* unexport the pwm channel */
+    return 1;
+  }
 
   puts ("\nsuccess");
-
-  (void)argv;
 }

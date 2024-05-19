@@ -91,9 +91,13 @@ int main (int argc, char **argv) {
           "  pwm.duty_cycle : %u\n"
           "  pwm.enabled    : %hhu\n"
           "  delay          : %u\n"
-          "  revolutions    : %u\n",
+#ifdef UNICODEPI
+          "  \u03C0 iterations   : %u     (%u revolutions)\n",
+#else
+          "  Pi iterations  : %u     (%u revolutions)\n",
+#endif
           buf, pwm.period, pwm.frequency,
-          pwm.duty_cycle, pwm.enabled, delay, revs);
+          pwm.duty_cycle, pwm.enabled, delay, revs, revs / 2);
 
   /* open duty_cycle file for repeated writes */
   if (pwm_open_duty_cycle (&pwm) == -1) {

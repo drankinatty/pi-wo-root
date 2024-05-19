@@ -56,9 +56,10 @@ int dir_exists (const char *dir);
 
 
 /**
- * @brief pwm_set_channel constructs string-literal from PWMPATH assigning
- * retuls to pwmfs member of struct, and sets chip and channel members.
- * @param pwm pointer to pwm_t struct to hold values.
+ * @brief pwm_set_channel sets PWM channel used to construct all PWMPATH
+ * sysfs names used to interact with the PWM channel.
+ * (e.g. /sys/class/pwm/pwmchipX/pwmY/{period, duty_cycle, enable})
+ * @param pwm pointer to pwm_t struct to hold pwm config values.
  * @param chan pwm channel to construct devfs path to open.
  * @return returns 0 on success, -1 otherwise.
  */
@@ -117,7 +118,7 @@ int pwm_close_duty_cycle (pwm_t *pwm);
 
 
 /**
- * @brief write duty cycle for pwm channel to sysfs duty_cycle file.
+ * @brief write duty cycle for pwm channel to open sysfs duty_cycle file.
  * @param pwm pointer to pwm struct for channel to write duty_cycle for.
  * @param duty_cycle fraction of period in nanoseconds for signal high.
  * @return returns 0 on success, -1 otherwise.
