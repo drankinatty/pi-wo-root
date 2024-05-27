@@ -42,7 +42,6 @@ static volatile __u8 writing = 1;     /* flag - read thread loop control */
 typedef struct {
   struct gpio_v2_line_config *linecfg;
   struct gpio_v2_line_request *linereq;
-  struct gpio_v2_line_values *linevals;
   int fd;
 } gpio_v2_t;
 
@@ -78,7 +77,7 @@ void usage_err (char * const *argv, const char *errmsg)
 
 /**
  * @brief set the pins for ioctl linereq from the npins specified in pinarr.
- * @param gpio pointer to struct containing pointers to gpio_vs data
+ * @param gpio pointer to struct containing pointers to gpio_v2 data
  * structures use by ioctl.
  * @param pinarr array (pointer to first element) of Broadcom GPIO pin
  * numbers to control through gpio->linereq.
@@ -163,37 +162,36 @@ int gpio_line_cfg_ioctl (gpio_v2_t *gpio)
  * @brief write gpio pin (line) values (HI/LO) from bits set or clearned
  * in gpio->linevals->bits for pins with bit set high in gpio->linevals->mask
  * from mask using gpio_v2 ioct line request.
- * @param gpio gpio v2_t struct holding linereq with open linereq file
- * descriptor set by prior call to gpio_line_cfg_ioctl() used to write
- * linevals to gpio pin index(s) in linereq->offsets specified by bits HI
- * in mask.
- * @param mask bitmap with bits 1 (HI) that correspond to index in
- * gpio->linereq->offsets pin array that will be set.
+ * @param linereq pointer to gpio_v2_line_request struct holding linereq with
+ * open linereq file descriptor set by prior call to gpio_line_cfg_ioctl()
+ * used to write linevals to gpio pin index(s) in linereq->offsets specified
+ * by bits HI in mask.
  * @param bits gpio value to write (0 - LO, 1 - HI) to set bit in
  * linereq->bits for bits specified in mask.
+ * @param mask bitmap with bits 1 (HI) that correspond to index in
+ * gpio->linereq->offsets pin array that will be set.
  * @return returns 0 on success, -1 otherwise.
  */
-int gpio_line_set_values (gpio_v2_t *gpio, __u64 bits,  __u64 mask)
+int gpio_line_set_values (struct gpio_v2_line_request *linereq,
+                          __u64 bits,  __u64 mask)
 {
+  struct gpio_v2_line_values linevals = { .bits = bits, .mask = mask };
+
   /* set or clear linereq .bits pin values (bitmap of pin values set to
    * bits that correspond to pin bits (bitmap indexes) set HI in mask.
    */
   if ((bits & mask) > 0) {
-    gpio->linevals->bits |= mask;
+    linevals.bits |= mask;
   }
   else {
-    gpio->linevals->bits &= (0xffffffffffffffff & ~mask);
+    linevals.bits &= (0xffffffffffffffff & ~mask);
   }
-
-  /* set linevals mask to mask */
-  gpio->linevals->mask = mask;
 
   /* set GPIO pin value to bit in lineval->bits (0 or 1) for pins with
    * bit == 1 in mask.
    */
-  if (ioctl (gpio->linereq->fd, GPIO_V2_LINE_SET_VALUES_IOCTL,
-              gpio->linevals) < 0) {
-    perror ("ioctl-GPIO_V2_LINE_SET_VALUES_IOCTL-1");
+  if (ioctl (linereq->fd, GPIO_V2_LINE_SET_VALUES_IOCTL, &linevals) < 0) {
+    perror ("gpio_line_set_values()-GPIO_V2_LINE_SET_VALUES_IOCTL");
     return -1;
   }
 
@@ -234,7 +232,13 @@ int gpio_dev_close (int gpiofd)
 }
 
 
-
+/**
+ * @brief separate thread to read rising and falling edges written to
+ * the GPIO lines in main.
+ * @param data thread function parameter passing pointer to gpio_v2_t struct
+ * with configured gpio_v2_line_request.
+ * @return returns pointer to data (same gpio_v2_line_request - unchanged).
+ */
 void *threadfn_reader (void *data)
 {
   /* cast/get linereq struct from data parameter */
@@ -327,7 +331,6 @@ void *threadfn_reader (void *data)
 }
 
 
-
 /**
  * @brief print the GPIO number and function for each GPIO line (pin) in
  * a 3-column format.
@@ -413,14 +416,13 @@ int main (int argc, char * const *argv) {
                               .flags =  GPIO_V2_LINE_FLAG_OUTPUT          |
                                         GPIO_V2_LINE_FLAG_BIAS_PULL_DOWN };
   struct gpio_v2_line_request linereq = { .offsets = {0} };
-  struct gpio_v2_line_values linevals = { .bits = 0x01, .mask = 0x01 };
 
   /* pins is a convenience struct of gpio_v2 config structs to which
    * a pointer can be provided as the parameter fo the thread function.
    */
   gpio_v2_t pins =  { .linecfg = &linecfg,
                       .linereq = &linereq,
-                      .linevals = &linevals };
+                     /* .linevals = &linevals */ };
   /* gpio_v2 attribute and attribute config for flags for read pin
    * (write pin, e.g. offsets[0] will use default linecfg flags)
    */
@@ -545,14 +547,14 @@ int main (int argc, char * const *argv) {
     /* write pin is bit-index 0 in linevals.mask to set corresponding
      * bit value in linvals.bits (bit 0 is 1 - HI)
      */
-    if (gpio_line_set_values (&pins, 0x01, 0x01) == -1) {
+    if (gpio_line_set_values (&linereq, 0x01, 0x01) == -1) {
       writing = 0;
       break;
     }
     nanosleep (&ts, &tr);
 
     /* now set/clear bit 0 to set LO */
-    if (gpio_line_set_values (&pins, 0x00, 0x01) == -1) {
+    if (gpio_line_set_values (&linereq, 0x00, 0x01) == -1) {
       writing = 0;
       break;
     }

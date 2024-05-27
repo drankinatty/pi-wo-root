@@ -14,9 +14,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-/* chip info output format constant(s) */
-#define INFOCOLS          3u
-
 /* pthread validation macros */
 #define handle_error_en(en, msg) \
   do { if (en) { errno = en; perror(msg); exit(EXIT_FAILURE); }} while (0)
@@ -30,13 +27,18 @@
 /* define max number of GPIO lines (note: bcm2710A has 58) */
 #define GPIOMAX           54
 
-/* default write and read GPIO pins */
-#define GPIO_WR_PIN       23
-#define GPIO_RD_PIN       24
+/* default button GPIO pin (Raspberry Pi GPIO26)
+ * can be set with 1st program argument (argv[1])
+ */
+#define GPIO_BTN_PIN      26
 
 #define INPUTTIMEOUT     100          /* poll input timeout (ms) */
 
-static volatile __u8 writing = 1;     /* flag - read thread loop control */
+/* global thread loop control flag */
+static volatile __u8 monitoring = 1;
+
+/* global flag for button pressed */
+static volatile __u8 pressed = 0;
 
 /* thread data struct of values needed by reader thread */
 typedef struct {
@@ -44,7 +46,6 @@ typedef struct {
   struct gpio_v2_line_request *linereq;
   int fd;
 } gpio_v2_t;
-
 
 /**
  * @brief outputs usage for command line arguments and if err nonzero exits.
@@ -233,13 +234,13 @@ int gpio_dev_close (int gpiofd)
 
 
 /**
- * @brief separate thread to read rising and falling edges written to
- * the GPIO lines in main.
+ * @brief separate thread to read rising edge when button pressed and
+ * gpio line pulled low, and falling edge on button release.
  * @param data thread function parameter passing pointer to gpio_v2_t struct
  * with configured gpio_v2_line_request.
  * @return returns pointer to data (same gpio_v2_line_request - unchanged).
  */
-void *threadfn_reader (void *data)
+void *threadfn_read_btn (void *data)
 {
   /* cast/get linereq struct from data parameter */
   gpio_v2_t *gpio = data;
@@ -252,13 +253,13 @@ void *threadfn_reader (void *data)
   struct gpio_v2_line_event lineevent = { .timestamp_ns = 0 };
 
   __u64 event_ts_start = 0,   /* timespec start/end times */
-        event_ts_end = 0,
-        count_rising = 0,     /* count of rising, falling edges */
-        count_falling = 0,
+        event_ts_end = 0;
+  __u64 count_rising = 0,     /* count of rising edges */
+        count_falling = 0,    /* count of falling edges */
         count_other = 0;      /* count for other - SNAFU */
 
   /* loop while writing loop-control flag true */
-  while (writing == 1) {
+  while (monitoring == 1) {
     /* poll pin event with 1/10th second timeout (should not timeout) */
     int nfds = poll (&readfds, 1, INPUTTIMEOUT),
         nbytes = 0;
@@ -269,12 +270,9 @@ void *threadfn_reader (void *data)
       continue;
     }
 
+    /* for button press, long timeout is fine */
     if (nfds == 0) {  /* timeout occurred */
-#ifdef DEBUG
-      fputs ("poll - timeout", stderr);
-#endif
-      writing = 0;
-      break;
+      continue;
     }
 
     if (readfds.revents & POLLIN) {   /* process event */
@@ -283,23 +281,20 @@ void *threadfn_reader (void *data)
         perror ("read - lineevent");
         continue;
       }
-      /* hand rising, falling or other event IDs */
+      /* handle rising and falling or other event IDs */
       if (lineevent.id == GPIO_V2_LINE_EVENT_RISING_EDGE) {
+        event_ts_start = lineevent.timestamp_ns;
         count_rising += 1;
+        printf ("rising edge  : %llu\n", count_rising);
       }
       else if (lineevent.id == GPIO_V2_LINE_EVENT_FALLING_EDGE) {
+        event_ts_end = lineevent.timestamp_ns;
         count_falling += 1;
+        printf ("falling edge : %llu   (press duration : %llu ms)\n",
+                count_falling, (event_ts_end - event_ts_start) / 1000000);
       }
       else {
         count_other += 1;
-      }
-
-      /* use timeout to set edge frequency */
-      if (event_ts_start == 0) {
-        event_ts_start = lineevent.timestamp_ns;
-      }
-      else {
-        event_ts_end = lineevent.timestamp_ns;
       }
     }
   }
@@ -308,170 +303,98 @@ void *threadfn_reader (void *data)
   printf ("Received %llu rising and %llu falling edges (%llu other).\n",
           count_rising, count_falling, count_other);
 
-  __u64 duration = event_ts_end - event_ts_start;
-  double seconds = duration / 1e9;
-
-  printf ("Total duration %llu ns (%f s).\n", duration, seconds);
-
-  /* guard agaist floating point exception if no edges caught */
-  if (count_rising || count_falling) {
-    __u64 nanos_per_edge = duration / (count_rising + count_falling);
-
-    printf ("Average %llu ns (%llu microseconds) per edge.\n",
-            nanos_per_edge, (nanos_per_edge / 1000));
-  }
-
-  __u64 per_second = count_rising / seconds;
-
-  printf ("Rising edge frequency %llu Hz.\n", per_second);
-
-  close (readfds.fd);   /* close poll file descriptor */
-
   return data;    /* return pointer to data parameter (unchanged) */
 }
 
 
 /**
- * @brief print the GPIO number and function for each GPIO line (pin) in
- * a 3-column format.
- * @param gpiofd open file descriptor for gpiochipX returned from prior call
- * to gpio_dev_open().
- * @return returns 0 on success, -1 otherwise.
+ * @brief simple wrapper for pselect used in main to exit program.
+ * @param sec timeout period seconds.
+ * @param nsec timeout period nanoseconds.
+ * @return returns the number of descriptors ready for reading.
  */
-int prn_gpio_v2_ghip_info (int gpiofd)
+int pselect_timer (unsigned sec, unsigned nsec)
 {
-  __u8  rows = 0,
-        remstart = 0;
-  struct gpiochip_info chip_info = { .name = "" };
+  fd_set set;
+  int res;
+  struct timespec ts = {  .tv_sec = sec,
+                          .tv_nsec = nsec  };
 
-  /* gpio_v2 ioctl call to get chip information */
-  if (ioctl (gpiofd, GPIO_GET_CHIPINFO_IOCTL, &chip_info) == -1) {
-    perror ("ioctl-GPIO_GET_CHIPINFO_IOCTL");
-    return -1;
-  }
+  /* Initialize the file descriptor set. */
+  FD_ZERO (&set);
+  FD_SET (0, &set);
 
-  /* validate lines returned (integer division intentional) */
-  if ((rows = chip_info.lines / INFOCOLS) == 0) {
-    fputs ("error: GPIO_GET_CHIPINFO_IOCTL no GPIO lines.\n", stderr);
-    return -1;
-  }
-  remstart = rows * INFOCOLS;   /* compute no. of rows to print at end */
+  /* watch STDIN_FILENO with timeout_sec timeout */
+  res = pselect (1, &set, NULL, NULL, &ts, NULL);
 
-  /* output chip information */
-  printf ("\nGPIO chip information\n\n"
-          "  name  : %s\n"
-          "  label : %s\n"
-          "  lines : %u\n\n",
-          chip_info.name, chip_info.label, chip_info.lines);
-
-  /* loop producing output of gpios in 3-column format */
-  for (__u8 r = 0; r < rows; r++) {
-    for (__u32 c = 0; c < INFOCOLS; c++) {
-      __u32 chip = r * INFOCOLS + c;
-      struct gpio_v2_line_info line_info = { .name = "",
-                                             .consumer = "",
-                                             .offset = chip };
-
-      if (ioctl (gpiofd, GPIO_V2_GET_LINEINFO_IOCTL, &line_info) == -1) {
-        perror ("ioctl-GPIO_GET_LINEINFO_IOCTL");
-        fprintf (stderr, "Failed getting line %u info.\n", chip);
-        continue;
-      }
-
-      printf ("  %2hhu :  %-18s", chip, line_info.name);
-    }
-    putchar ('\n');
-  }
-
-  /* output any remaining lines (e.g. r * c <= line < chip_info.lines) */
-  for (__u32 c = remstart; c < chip_info.lines; c++) {
-    struct gpio_v2_line_info line_info = { .name = "",
-                                           .consumer = "",
-                                           .offset = c };
-
-    if (ioctl (gpiofd, GPIO_V2_GET_LINEINFO_IOCTL, &line_info) == -1) {
-      perror ("ioctl-GPIO_GET_LINEINFO_IOCTL");
-      fprintf (stderr, "Failed getting line %u info.\n", c);
-      continue;
-    }
-
-    printf ("  %2hhu :  %-18s", c, line_info.name);
-  }
-  puts ("\n");    /* tidy up with an additional (2) newlines */
-
-  return 0;
+  return res;
 }
 
 
+/**
+ * @brief empty any characters remaining in stdin after input.
+ * @param c last character read from stdin (must be initialized)
+ */
+void empty_stdin (int c)
+{
+  while (c != '\n' && c != EOF) {
+    c = getchar();
+  }
+}
+
+
+/**
+ * @brief configure GPIO pin for button press detection using kernel
+ * userspace gpio_v2 API. GPIO pin can be set by first program argument
+ * (GPIO26 on Raspberry Pi by default - Broadcom pin no.)
+ * @param argc program argument count.
+ * @param argv program argument vector.
+ * @return returns EXIT_SUCCESS on success, EXIT_FAILURE otherwise.
+ */
 int main (int argc, char * const *argv) {
 
-  int gpiofd;
-  unsigned  cycles = 1000,
-            delayns = 5000;
-  __u8  gpio_wr_pin = GPIO_WR_PIN,
-        gpio_rd_pin = GPIO_RD_PIN;
+  int gpiofd;                         /* returned gpiochipX file descriptor */
+  __u8  gpio_btn_pin = GPIO_BTN_PIN;  /* initial set of gpio pin to default */
 
-  /* gpio_v2 line config, line request and line values, */
+  /* gpio_v2 line config, line request and line values, read defaults set */
   struct gpio_v2_line_config linecfg = {
-                              .flags =  GPIO_V2_LINE_FLAG_OUTPUT          |
-                                        GPIO_V2_LINE_FLAG_BIAS_PULL_DOWN };
-  struct gpio_v2_line_request linereq = { .offsets = {0} };
+                              .flags =  GPIO_V2_LINE_FLAG_ACTIVE_LOW      |
+                                        GPIO_V2_LINE_FLAG_INPUT           |
+                                        GPIO_V2_LINE_FLAG_EDGE_RISING     |
+                                        GPIO_V2_LINE_FLAG_EDGE_FALLING    |
+                                        GPIO_V2_LINE_FLAG_BIAS_PULL_UP,
+                              .num_attrs = 1 };
+  struct gpio_v2_line_request linereq = { .offsets[0] = gpio_btn_pin,
+                                          .num_lines = 1 };
 
   /* pins is a convenience struct of gpio_v2 config structs to which
    * a pointer can be provided as the parameter fo the thread function.
    */
   gpio_v2_t pins =  { .linecfg = &linecfg,
-                      .linereq = &linereq,
-                     /* .linevals = &linevals */ };
-  /* gpio_v2 attribute and attribute config for flags for read pin
-   * (write pin, e.g. offsets[0] will use default linecfg flags)
+                      .linereq = &linereq };
+  /* gpio_v2 attribute and attribute config setting button debounce to 5 ms.
+   * for button gpio pin (offsets[0]) - adjust as needed)
    */
-  struct gpio_v2_line_attribute rd_attr = { .id = 1 };
-  struct gpio_v2_line_config_attribute rd_cfg_attr = { .attr = {0} };
+  struct gpio_v2_line_attribute rd_attr = { .id =
+                                              GPIO_V2_LINE_ATTR_ID_DEBOUNCE,
+                                            .debounce_period_us =
+                                              5000 };
+  struct gpio_v2_line_config_attribute rd_cfg_attr = { .attr = rd_attr,
+                                                       .mask = 0x01 };
 
   pthread_t id;                           /* pwm signal thread id */
   pthread_attr_t attr;                    /* pwm thread attributes */
   void *res;                              /* results pointer */
 
-  struct timespec ts = { .tv_sec = 0 },   /* delay timespecs */
-                  tr = { .tv_sec = 0 };
-
   /* process command line arguments */
-  if (argc > 1) {   /* write pin gpio */
+  if (argc > 1) {   /* gpio button pin */
     __u8 tmp = 0;
     if (sscanf (argv[1], "%hhu", &tmp) != 1) {
       usage_err (argv, "invalid unsigned byte value provided for write pin");
     }
-    gpio_wr_pin = tmp;
+    gpio_btn_pin = tmp;
+    linereq.offsets[0] = gpio_btn_pin;
   }
-
-  if (argc > 2) {   /* read pin gpio */
-    __u8 tmp = 0;
-    if (sscanf (argv[2], "%hhu", &tmp) != 1) {
-      usage_err (argv, "invalid unsigned byte value provided for read pin");
-    }
-    gpio_rd_pin = tmp;
-  }
-
-  if (argc > 3) {   /* number or rising and falling edges to count */
-    unsigned tmp = 0;
-    if (sscanf (argv[3], "%u", &tmp) != 1) {
-      usage_err (argv, "invalid unsigned value provided for no. of cycles");
-    }
-    cycles = tmp;
-  }
-
-  if (argc > 4) {   /* delay between reads */
-    unsigned tmp = 0;
-    if (sscanf (argv[4], "%u", &tmp) != 1) {
-      usage_err (argv, "invalid unsigned value provided for delay (ns)");
-    }
-    delayns = tmp;
-  }
-
-  /**
-   *  gpiochipX - open and get info
-   */
 
   /* open gpiochipX device - validate */
   if ((gpiofd = gpio_dev_open (GPIOCHIP)) == -1) {
@@ -479,90 +402,41 @@ int main (int argc, char * const *argv) {
   }
   pins.fd = gpiofd;
 
-  /* output gpiochip and each current gpio line (pin) function */
-  if (prn_gpio_v2_ghip_info (gpiofd) == -1) {
-    return 1;
-  }
-
-  /**
-   *  configure gpio line request and line configuration
+  /* assign additional debounce line attribute to 1st element of
+   * linecfg attrs array.
    */
+  linecfg.attrs[0] = rd_cfg_attr;
 
-  /* gpio_v2 line request for lines (pins) */
-  pins.linereq->offsets[0] = gpio_wr_pin;
-  pins.linereq->offsets[1] = gpio_rd_pin;
-  pins.linereq->num_lines = 2;
-
-  /* dump chip file descriptor and configured pins */
-  printf ("Chip file descriptor and GPIO pins\n\n"
-          "  pins->fd   : %d\n"
-          "  offsets[0] : %u\n"
-          "  offsets[1] : %u\n\n",
-          pins.fd, pins.linereq->offsets[0], pins.linereq->offsets[1]);
-
-  /* provide separate attributes for read pin to catch both edges */
-  rd_attr.id = GPIO_V2_LINE_ATTR_ID_FLAGS;
-  rd_attr.flags = GPIO_V2_LINE_FLAG_INPUT           |
-                  GPIO_V2_LINE_FLAG_EDGE_RISING     |
-                  GPIO_V2_LINE_FLAG_EDGE_FALLING    |
-                  GPIO_V2_LINE_FLAG_BIAS_PULL_DOWN;
-
-  /* gpio_v2 attribute config for read pin */
-  rd_cfg_attr.attr = rd_attr;
-  rd_cfg_attr.mask = 0x02;                /* 0b00000010 - bit indexes read pin */
-
-  /* gpio_v2 line lines (pins) configuration */
-  pins.linecfg->num_attrs = 1;            /* for read pin attributes */
-  pins.linecfg->attrs[0] = rd_cfg_attr;   /* assign read attr to linecfg array */
-
-  /* set line (pin) configuration */
+  /* set line (pin) configuration using convenience struct pins */
   if (gpio_line_cfg_ioctl (&pins) == -1) {
     return 1;
   }
 
-  /**
-   *  create reader thread
-   */
+  usleep (INPUTTIMEOUT * 100);      /* delay input timeout microsecs */
 
   /* initialize thread attributes (using defaults) and validate */
   handle_error_en (pthread_attr_init (&attr), "pthread_attr_init");
 
   /* create thread to handle PWM interval timer signal / validate */
-  handle_error_en (pthread_create (&id, &attr, threadfn_reader, &pins),
+  handle_error_en (pthread_create (&id, &attr, threadfn_read_btn, &pins),
                    "pthread_create");
 
-  /**
-   *  write to write pin providing edges for reader
-   */
+  puts ("\nwaiting on button pressesses (press Enter to exit)\n");
 
-  printf ("-------------- now writing and reading -------------------\n\n"
-          "  cycles     : %u\n"
-          "  delay (ns) : %u\n\n", cycles, delayns);
-
-  ts.tv_nsec = delayns;     /* set pin write time between edges delay */
-
-  /* write loop for generating rising/falling edges to be read */
-  for (__u32 i = 0; writing && i < cycles; i++) {
-
-    /* write pin is bit-index 0 in linevals.mask to set corresponding
-     * bit value in linvals.bits (bit 0 is 1 - HI)
-     */
-    if (gpio_line_set_values (&linereq, 0x01, 0x01) == -1) {
-      writing = 0;
-      break;
+  for (;;) {  /* loop continually until input received for exit */
+    if (pselect_timer (0, 2.e8) == 1) {
+      int c = getchar();
+      /* check for 'q' quit (or empty input or EOF) */
+      if (c == 'q' || c == '\n' || c == EOF) {
+        empty_stdin (c);    /* empty stdin before loop exit */
+        monitoring = 0;     /* set thread loop flag 0, ending thread */
+        break;
+      }
+      empty_stdin (c);      /* empty stdin after each input */
     }
-    nanosleep (&ts, &tr);
-
-    /* now set/clear bit 0 to set LO */
-    if (gpio_line_set_values (&linereq, 0x00, 0x01) == -1) {
-      writing = 0;
-      break;
-    }
-    nanosleep (&ts, &tr);
   }
 
-  writing = 0;                      /* terminate thread loop */
-  usleep (INPUTTIMEOUT * 1000);     /* delay input timeout microsecs */
+  usleep (INPUTTIMEOUT * 100);      /* delay input timeout microsecs */
 
   /* wait for thread to exit */
   handle_error_en (pthread_join (id, &res), "pthread_join");

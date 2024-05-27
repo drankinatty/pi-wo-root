@@ -31,7 +31,7 @@ int main (int argc, char **argv) {
             revs = 24;
 
 
-  if (argc > 1) {
+  if (argc > 1) {   /* pwm channel  (0 <= pwm.channel < PWMCHANNELS) */
     __u8 tmp = 0;
     if (sscanf (argv[1], "%hhu", &tmp) != 1 && tmp >= PWMCHANNELS) {
       fprintf (stderr, "error: argument %hhu exceeds PWMCHANNELS %hhu.\n",
