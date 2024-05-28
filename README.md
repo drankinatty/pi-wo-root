@@ -9,13 +9,17 @@ The result? A solid set of libraries to provide peripheral access using the kern
 
 ## Layout of Files in this Repository
 
-**Note:** Every Library or Example has a complete `Makefile` in its directory allowing you to simply type `make` to compile the code on your Pi (or any Linux box with the peripherals enabled in the kernel). All are written in C. (the oled interface, originally written by Gavin Lyons, is still written in C++ and was not rewritten in C when it was ported to use Linux `ioctl()` for hardware access.
+**Note:** Every Library and Example has a complete `Makefile` in its directory allowing you to simply type `make` to compile the code on your Pi (or any Linux box with the peripherals enabled in the kernel). All are written in C. (the oled interface, originally written by Gavin Lyons, is still written in C++ and was not rewritten in C when it was ported to use Linux `ioctl()` for hardware access.
 
-There are three directories, `examples`, `lib` and `tst`. The `examples` directory holds examples using the various libraries that are in a complete enough state to simply `make` and then run (after configuring your hardware of course). All examples come from the testing directory `tst` where much of the development work is done. The `tst` directory contains many intermediate examples that show the progression of development. Many being simple examples that are a great resource to use to come up to speed on how the libraries work and what calls are needed to initialize, use and then stop, remove whatever library you are interested in.
+There are three directories, `examples`, `lib` and `tst`. The `examples` directory holds examples using the various libraries that are in a completed state and the code reasonably commented. All examples come from the testing directory `tst` where much of the development work is done.
 
-The `lib` directory contains all the access libraries for the peripherals. The libraries install to `prefix=/usr/local` by default. The Pi OS provides the `staff` group that can own the files/directories in `/usr/local`. Configuring `/usr/local` that way and adding yourself to the `staff` group will allow you to maintain the files there without needing to be root, or use `sudo` or `su`. (you will still need root access to run `ldconfig` after installing or removing a library -- I can't help you there)
+The `tst` directory contains many intermediate examples that show the progression of development. Many being simple examples that are a great resource to use to come up to speed on how the libraries work and what calls are needed to initialize, use and then stop, remove whatever library or peripheral you are interested in. All code is the `tst` directory is in finished form, all code will compile without error or warnings. Code with a directory in `tst` and not in `examples` simply means the functionality of that code has been incorporated into a larger source.
 
-Also add your user to the `gpio` group. (e.g. `sudo gpasswd -a you gpio`, then log out/in so group changes are seen by your environment) `/dev/gpiomem`, used by `tinygpio`, is group-owned by the `gpio` group.
+The `lib` directory contains the libraries for peripherals access and utilities such as an interval timer, hardware and software PWM, I2C, ssd1306-OLED and several chip-specific interfaces (such as for the MPU6050 through MPU9255). The libraries were created to gather related code that is often repeated in each project and put it in shared-object library form to make it simple to incorporate in new projects -- and save typing. The libraries install to `prefix=/usr/local` by default.
+
+**Note:** The Pi OS provides the **staff** group that can own the files/directories in `/usr/local`. Configuring `/usr/local` that way and adding yourself to the **staff** group will allow you to maintain the files there without needing to be root, or use `sudo` or `su`. (you will still need root access to run `ldconfig` after installing or removing a library -- I can't help you there)
+
+Also add your user to the `gpio` group. (e.g. `sudo gpasswd -a you gpio`, then log out/in so group changes are seen by your environment) `/dev/gpiomem`, used by `tinygpio`, is group-owned by the **gpio** group.
 
 The primary libraries for peripheral access are:
 

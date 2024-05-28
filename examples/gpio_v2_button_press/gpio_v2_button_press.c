@@ -29,8 +29,10 @@
 
 /* default button GPIO pin (Raspberry Pi GPIO26)
  * can be set with 1st program argument (argv[1])
+ * debounce us can be adjust with the 2nd (argv[2])
  */
 #define GPIO_BTN_PIN      26
+#define PIN_DEBOUNCE    5000
 
 #define INPUTTIMEOUT     100          /* poll input timeout (ms) */
 
@@ -253,8 +255,8 @@ void *threadfn_read_btn (void *data)
   struct gpio_v2_line_event lineevent = { .timestamp_ns = 0 };
 
   __u64 event_ts_start = 0,   /* timespec start/end times */
-        event_ts_end = 0;
-  __u64 count_rising = 0,     /* count of rising edges */
+        event_ts_end = 0,
+        count_rising = 0,     /* count of rising edges */
         count_falling = 0,    /* count of falling edges */
         count_other = 0;      /* count for other - SNAFU */
 
@@ -349,12 +351,15 @@ void empty_stdin (int c)
  * (GPIO26 on Raspberry Pi by default - Broadcom pin no.)
  * @param argc program argument count.
  * @param argv program argument vector.
+ *   argv[1] - GPIO pin with button attached (pull-up)
+ *   argv[2] - debounce period in microseconds (us)
  * @return returns EXIT_SUCCESS on success, EXIT_FAILURE otherwise.
  */
 int main (int argc, char * const *argv) {
 
   int gpiofd;                         /* returned gpiochipX file descriptor */
   __u8  gpio_btn_pin = GPIO_BTN_PIN;  /* initial set of gpio pin to default */
+  __u32 pin_debounce = PIN_DEBOUNCE;  /* button debounce period (us)*/
 
   /* gpio_v2 line config, line request and line values, read defaults set */
   struct gpio_v2_line_config linecfg = {
@@ -395,6 +400,15 @@ int main (int argc, char * const *argv) {
     gpio_btn_pin = tmp;
     linereq.offsets[0] = gpio_btn_pin;
   }
+  if (argc > 2) {   /* debounce period for gpio pin */
+    __u32 tmp = 0;
+    if (sscanf (argv[2], "%u", &tmp) != 1) {
+      usage_err (argv, "invalid unsigned byte value provided for write pin");
+    }
+    pin_debounce = tmp;
+    rd_attr.debounce_period_us = pin_debounce;
+    rd_cfg_attr.attr = rd_attr;
+  }
 
   /* open gpiochipX device - validate */
   if ((gpiofd = gpio_dev_open (GPIOCHIP)) == -1) {
@@ -421,7 +435,9 @@ int main (int argc, char * const *argv) {
   handle_error_en (pthread_create (&id, &attr, threadfn_read_btn, &pins),
                    "pthread_create");
 
-  puts ("\nwaiting on button pressesses (press Enter to exit)\n");
+  printf ("\nwaiting on button pressesses (press Enter to exit)\n\n"
+          "  button GPIO pin : %hhu\n"
+          "  debounce period : %u (us)\n\n", gpio_btn_pin, pin_debounce);
 
   for (;;) {  /* loop continually until input received for exit */
     if (pselect_timer (0, 2.e8) == 1) {
