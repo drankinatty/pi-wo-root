@@ -57,9 +57,7 @@ typedef struct {
 void usage (char * const *argv, __u8 err)
 {
   printf ("\nCommand line argument usage (with defaults shown)\n\n"
-          "  %s [ write_pin (23) read_pin (24) "
-          "cycles (1000) delayns (5000) ]\n\n", argv[0]);
-
+          "  %s [ gpio_pin (26) debounce_period (5000 us) ]\n\n", argv[0]);
   if (err) {
     exit (EXIT_FAILURE);
   }
