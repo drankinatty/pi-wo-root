@@ -167,6 +167,22 @@ int pwm_set_duty_cycle_pct (pwm_t *pwm, float pct);
 int pwm_enable_pwm (pwm_t *pwm, __u8 enabled);
 
 
+/**
+ * @brief wrapper for pwm_enable_pwm enabling PWM.
+ * @param pwm pointer to pwm struct for channel to enable/disable PWM.
+ * @return returns 0 on success, -1 otherwise.
+ */
+int pwm_enable (pwm_t *pwm);
+
+
+/**
+ * @brief wrapper for pwm_enable_pwm disabling PWM.
+ * @param pwm pointer to pwm struct for channel to enable/disable PWM.
+ * @return returns 0 on success, -1 otherwise.
+ */
+int pwm_disable (pwm_t *pwm);
+
+
 #ifdef __cplusplus
 } /* closing brace for extern "C" */
 #endif

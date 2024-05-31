@@ -68,7 +68,7 @@ int main (int argc, char **argv) {
   /* cycle duty cycle from 1000 to period - 1000, 50 msec delay */
   for (uint32_t dc = 0; dc < 100; dc += 1) {
     if (pwm_write_duty_cycle_pct (&pwm, dc) == -1) {
-      pwm_enable_pwm (&pwm, 0);   /* on failure, disable PWM, exit */
+      pwm_enable (&pwm);          /* on failure, disable PWM, exit */
       return -1;
     }
 #ifndef NOANSI
@@ -99,7 +99,7 @@ int main (int argc, char **argv) {
     return -1;
   }
 
-  pwm_enable_pwm (&pwm, 0);           /* disable pwm */
+  pwm_disable (&pwm);                 /* disable pwm */
 #ifndef NOANSI
   printf ("\x1b[1A\x1b[19C\x1b[0K%hhu\n", pwm.enabled);
 #endif

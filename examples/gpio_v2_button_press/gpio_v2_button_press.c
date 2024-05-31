@@ -395,17 +395,17 @@ int main (int argc, char * const *argv) {
     if (sscanf (argv[1], "%hhu", &tmp) != 1) {
       usage_err (argv, "invalid unsigned byte value provided for write pin");
     }
-    gpio_btn_pin = tmp;
-    linereq.offsets[0] = gpio_btn_pin;
+    gpio_btn_pin = tmp;                   /* assign new pin number */
+    linereq.offsets[0] = gpio_btn_pin;    /* update linreq offsets[0] */
   }
   if (argc > 2) {   /* debounce period for gpio pin */
     __u32 tmp = 0;
     if (sscanf (argv[2], "%u", &tmp) != 1) {
       usage_err (argv, "invalid unsigned byte value provided for write pin");
     }
-    pin_debounce = tmp;
-    rd_attr.debounce_period_us = pin_debounce;
-    rd_cfg_attr.attr = rd_attr;
+    pin_debounce = tmp;                   /* assign new pin debounce */
+    rd_attr.debounce_period_us = pin_debounce;  /* update attribute value */
+    rd_cfg_attr.attr = rd_attr;           /* update line config attribute */
   }
 
   /* open gpiochipX device - validate */

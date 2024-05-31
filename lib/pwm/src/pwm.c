@@ -402,3 +402,26 @@ int pwm_enable_pwm (pwm_t *pwm, __u8 enabled)
 
   return 0;                           /* return success */
 }
+
+
+/**
+ * @brief wrapper for pwm_enable_pwm enabling PWM.
+ * @param pwm pointer to pwm struct for channel to enable/disable PWM.
+ * @return returns 0 on success, -1 otherwise.
+ */
+int pwm_enable (pwm_t *pwm)
+{
+  return pwm_enable_pwm (pwm, 1);
+}
+
+
+/**
+ * @brief wrapper for pwm_enable_pwm disabling PWM.
+ * @param pwm pointer to pwm struct for channel to enable/disable PWM.
+ * @return returns 0 on success, -1 otherwise.
+ */
+int pwm_disable (pwm_t *pwm)
+{
+  return pwm_enable_pwm (pwm, 0);
+}
+

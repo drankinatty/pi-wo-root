@@ -81,7 +81,7 @@ int main (int argc, char **argv) {
     return 1;
   }
 
-  if (pwm_enable_pwm (&pwm, 1) == -1) {        /* enable pwm on channel */
+  if (pwm_enable (&pwm) == -1) {                /* enable pwm on channel */
     return 1;
   }
   printf ("current state of pwm:\n\n"
@@ -129,7 +129,7 @@ int main (int argc, char **argv) {
     return -1;
   }
 
-  pwm_enable_pwm (&pwm, 0);      /* disable pwm */
+  pwm_disable (&pwm);           /* disable pwm */
 
   puts ("\nsuccess");
 }
