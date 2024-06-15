@@ -40,13 +40,14 @@
  * can be set with 1st program argument (argv[1])
  * debounce us can be adjust with the 2nd (argv[2])
  */
-#define GPIO_BTN_PIN      26
-// #define PIN_DEBOUNCE    5000
-#define PIN_DEBOUNCE       0
+#define GPIO_BTN_PIN      26          /* default GPIO, can change w/1st arg */
+#define PIN_DEBOUNCE       0          /* 0 debounce delay attribute */
 
 #define INPUTTIMEOUT     100          /* poll input timeout (ms) */
 
 #define NANOSECRPM      6e10          /* nanoseconds per RPM */
+#define RPMMIN           200          /* minimum RPM to register */
+#define OUTLIER         1000          /* RPM change too great to be actual */
 
 /* global thread loop control flag */
 static volatile __u8 monitoring = 1;
@@ -105,7 +106,32 @@ void usage_err (char * const *argv, const char *errmsg)
 
 /**
  * @brief simple function to add val to t as max in decreasing order if val
- * is greater than any of the current values.
+ * is greater than any of the current values and less than the outlier limit.
+ * @param t pointer to initialize triu32_t struct.
+ * @param val value to add to t in-order if greater than current value.
+ * @param olimit outlier limit to omit spurrious values.
+ */
+void triu32_add_max_olimit (triu32_t *t, __u32 val, __u32 olimit)
+{
+  for (int i = 0; i < 3; i++) {
+    if (val > t->v[i]) {
+      long diff = val - t->v[i];
+      if (t->v[i] && labs (diff) > olimit) {
+        break;
+      }
+      for (int j = i + 1; j < 3; j++) {
+        t->v[j] = t->v[i];
+      }
+      t->v[i] = val;
+      break;
+    }
+  }
+}
+
+
+/**
+ * @brief convenience function to add val to t as max in decreasing order if val
+ * is greater than any of the current values (no outlier limit).
  * @param t pointer to initialize triu32_t struct.
  * @param val value to add to t in-order if greater than current value.
  */
@@ -120,6 +146,7 @@ void triu32_add_max (triu32_t *t, __u32 val)
       break;
     }
   }
+  // triu32_add_max_olimit (t, val, 0);
 }
 
 
@@ -375,10 +402,19 @@ void *threadfn_read_ir (void *data)
 
         revns = event_ts_end - event_ts_start;
         if (revns) {
-          pthread_mutex_lock (&lock);       /* lock mutex */
-          /* compute current RPM from ns / rev */
+          /* no mutex lock needed on lastrpm or drpm, only written below */
+          __u32 lastrpm = rpm;                    /* save last RPM */
+          long drpm = 0;                          /* change/delta in RPM */
+          pthread_mutex_lock (&lock);             /* lock mutex */
+          /* compute current RPM from (ns / rev) */
           rpm = (__u32)(NANOSECRPM / revns);
-          pthread_mutex_unlock (&lock);     /* unlock mutex */
+          drpm = rpm - lastrpm;                   /* get change in RPM */
+          /* if change greater than outlier limit, keep last RPM value */
+          if (labs (drpm) > OUTLIER) {
+            rpm = lastrpm;
+          }
+          pthread_mutex_unlock (&lock);           /* unlock mutex */
+          /* check/add new RPM to max value sequence */
           triu32_add_max (&maxrpm, rpm);
         }
       }
@@ -466,8 +502,8 @@ int main (int argc, char * const *argv) {
    */
   gpio_v2_t pins =  { .linecfg = &linecfg,
                       .linereq = &linereq };
-  /* gpio_v2 attribute and attribute config setting button debounce to 5 ms.
-   * for button gpio pin (offsets[0]) - adjust as needed)
+  /* gpio_v2 attribute and attribute config setting pin debounce. generally
+   * used for buttons, not needed for photoled - adjust if desired)
    */
   struct gpio_v2_line_attribute rd_attr = { .id =
                                               GPIO_V2_LINE_ATTR_ID_DEBOUNCE,
@@ -531,7 +567,7 @@ int main (int argc, char * const *argv) {
   printf ("\nwaiting on button pressesses (press Enter to exit)\n\n"
           "  button GPIO pin : %hhu\n"
           "  debounce period : %u (us)\033[?25l\n\n"
-          "  RPM : ", gpio_btn_pin, pin_debounce);
+          "  RPM : 0\n\033[1A\033[8C", gpio_btn_pin, pin_debounce);
 
   for (;;) {  /* loop continually until input received for exit */
     __u32 rpmupdate = 0;
@@ -548,7 +584,10 @@ int main (int argc, char * const *argv) {
     pthread_mutex_lock (&lock);       /* lock mutex */
     rpmupdate = rpm;                  /* assign global rpm */
     pthread_mutex_unlock (&lock);     /* unlock mutex */
-    if (rpmupdate != lastrpm) {
+    if (rpmupdate < RPMMIN) {         /* less than min, rpm is 0 */
+      rpmupdate = 0;
+    }
+    if (rpmupdate != lastrpm) {       /* if changed update display */
       printf ("%u\033[0K\n\033[1A\033[8C", rpmupdate);
       lastrpm = rpmupdate;
     }
